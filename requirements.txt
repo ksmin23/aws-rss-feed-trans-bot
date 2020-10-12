@@ -1,1 +1,7 @@
--e .
+beautifulsoup4==4.9.3
+boto3==1.15.16
+botocore==1.18.16
+feedparser==6.0.1
+fs==2.4.11
+fs-s3fs==1.1.1
+googletrans==3.0.0
