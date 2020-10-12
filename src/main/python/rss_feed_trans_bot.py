@@ -9,18 +9,34 @@ import collections
 import logging
 import io
 import os
+import pprint
+import random
 
 import feedparser
 from bs4 import BeautifulSoup
 from googletrans import Translator
 import boto3
 
+random.seed(47)
+
 logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 LOGGER = logging.getLogger()
 
+DRY_RUN = True if 'true' == os.getenv('DRY_RUN', 'true') else False
+
 AWS_REGION = os.getenv('REGION_NAME', 'us-east-1')
-S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'memex-var')
+
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'your-bucket-name')
 S3_OBJ_KEY_PREFIX = os.getenv('S3_OBJ_KEY_PREFIX', 'whats-new')
+
+PRESIGNED_URL_EXPIRES_IN = int(os.getenv('PRESIGNED_URL_EXPIRES_IN', 86400*7))
+
+EMAIL_FROM_ADDRESS = os.getenv('EMAIL_FROM_ADDRESS', 'your-sender-email-addr')
+EMAIL_TO_ADDRESSES = os.getenv('EMAIL_TO_ADDRESSES', 'your-receiver-email-addr-list')
+EMAIL_TO_ADDRESSES = [e.strip() for e in EMAIL_TO_ADDRESSES.split(',')]
+
+TRANS_DEST_LANG = os.getenv('TRANS_DEST_LANG', 'ko')
+TRANS_REQ_INTERVALS = [0.1, 0.3, 0.5, 0.7, 1.0]
 
 WHATS_NEW_URL = 'https://aws.amazon.com/about-aws/whats-new/recent/feed/'
 
@@ -54,7 +70,7 @@ def translate(translator, texts, dest='ko', interval=1):
 
   for key, elem in texts:
     trans_res = translator.translate(elem, dest=dest)
-    trans_texts[key] = trans_res.text 
+    trans_texts[key] = trans_res.text
     time.sleep(interval)
   return trans_texts
 
@@ -160,42 +176,87 @@ def fread_s3(s3_client, s3_bucket_name, s3_obj_key):
     return []
 
 
+def create_presigned_url(bucket_name, object_name, expiration=3600):
+  s3_client = boto3.client('s3', region_name=AWS_REGION)
+  try:
+    res = s3_client.generate_presigned_url('get_object',
+      Params={'Bucket': bucket_name, 'Key': object_name},
+      ExpiresIn=expiration)
+  except botocore.exceptions.ClientError as ex:
+    LOGGER.error(repr(ex))
+    return None
+  return res
+
+
+def send_email(from_addr, to_addrs, subject, html_body):
+  ses_client = boto3.client('ses', region_name=AWS_REGION)
+  ret = ses_client.send_email(Destination={'ToAddresses': to_addrs},
+    Message={'Body': {
+        'Html': {
+          'Charset': 'UTF-8',
+          'Data': html_body
+        }
+      },
+      'Subject': {
+        'Charset': 'UTF-8',
+        'Data': subject
+      }
+    },
+    Source=from_addr
+  )
+  retrn ret
+
+
 def lambda_handler(event, context):
   LOGGER.info('start to get rss feed')
+
   res = parse_feed(WHATS_NEW_URL)
 
-  LOGGER.info('count={count}, last_updated="{last_updated}"'.format(count=res['count'],
+  LOGGER.info('rss_feed: count={count}, last_updated="{last_updated}"'.format(count=res['count'],
     last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed'])))
 
-  LOGGER.info('start to translate rss feed')
+  LOGGER.info('translate rss feed')
   translator = Translator()
   title_texts = [(e['id'], e['title']) for e in res['entries']]
-  title_texts_trans = translate(translator, title_texts, dest='ko', interval=0.1)
+  title_texts_trans = translate(translator, title_texts,
+    dest=TRANS_DEST_LANG, interval=random.choice(TRANS_REQ_INTERVALS))
 
   summary_texts = [(e['id'], e['summary_parsed']['text']) for e in res['entries']]
-  summary_texts_trans = translate(translator, summary_texts, dest='ko', interval=0.1)
+  summary_texts_trans = translate(translator, summary_texts,
+    dest=TRANS_DEST_LANG, interval=random.choice(TRANS_REQ_INTERVALS))
 
-  LOGGER.info('start to add translated rss feed')
+  LOGGER.info('add translated rss feed')
+
   entry_ids_by_idx = {e['id']: idx for idx, e in enumerate(res['entries'])}
   for k, idx in entry_ids_by_idx.items():
     title_trans = title_texts_trans.get(k, '')
     summary_trans = summary_texts_trans.get(k, '')
-    res['entries'][idx]['title_trans'] = {'text': title_trans, 'lang': 'ko'}
-    res['entries'][idx]['summary_trans'] = {'text': summary_trans, 'lang': 'ko'}
+    res['entries'][idx]['title_trans'] = {'text': title_trans, 'lang': TRANS_DEST_LANG}
+    res['entries'][idx]['summary_trans'] = {'text': summary_trans, 'lang': TRANS_DEST_LANG}
 
   html_doc = gen_html(res)
+
+  LOGGER.info('save translated rss feed in S3')
 
   s3_file_name = 'anncmt-{}.html'.format(time.strftime('%Y%m%d%H', res['updated_parsed']))
   s3_obj_key = '{prefix}-html/{file_name}'.format(prefix=S3_OBJ_KEY_PREFIX, file_name=s3_file_name)
   s3_client = boto3.client('s3', region_name=AWS_REGION)
   fwrite_s3(s3_client, html_doc, s3_bucket=S3_BUCKET_NAME, s3_obj_key=s3_obj_key)
 
-#  html_idx = '\n'.join(['{},{}'.format(e['id'], time.strftime('%Y-%m-%dT%H:%M:%S', e['published_parsed'])) for e in res['entries']])
-#
-#  s3_file_name = 'anncmt-idx-{}.csv'.format(time.strftime('%Y%m%d%H', res['updated_parsed']))
-#  s3_obj_key = '{prefix}-idx/{file_name}'.format(prefix=S3_OBJ_KEY_PREFIX, file_name=s3_file_name)
-#  s3_client = boto3.client('s3', region_name=AWS_REGION)
-#  fwrite_s3(s3_client, html_idx, s3_bucket=S3_BUCKET_NAME, s3_obj_key=s3_obj_key)
+  LOGGER.info('send translated rss feed by email')
+
+  s3_obj_url = create_presigned_url(S3_BUCKET_NAME, s3_obj_key, expiration=PRESIGNED_URL_EXPIRES_IN)
+
+  from_addr = EMAIL_FROM_ADDRESS
+  to_addrs = EMAIL_TO_ADDRESSES
+  subject = '''[translated] AWS Recent Announcements'''
+  html_body = '''You can download AWS Recent Announcements translated in Korean:</br>
+<a class="ulink" href="{}" target="_blank">here</a>'''.format(s3_obj_url)
+
+  if DRY_RUN:
+    LOGGER.info('download-url: {}'.format(s3_obj_url))
+  elif s3_obj_url is not None:
+    send_email(from_addr, to_addrs, subject, html_body)
 
   LOGGER.info('end')
 
@@ -220,8 +281,5 @@ if __name__ == '__main__':
   lambda_handler(event, {})
 
   end_t = time.time()
-  elapsed_t = end_t - start_t
-  LOGGER.info(start_t)
-  LOGGER.info(end_t)
-  LOGGER.info('{:.2f}'.format(elapsed_t))
+  LOGGER.info('run_time: {:.2f}'.format(end_t - start_t))
 
