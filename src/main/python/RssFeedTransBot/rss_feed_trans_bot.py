@@ -17,10 +17,10 @@ from bs4 import BeautifulSoup
 from googletrans import Translator
 import boto3
 
-random.seed(47)
-
-logging.basicConfig(level=logging.INFO, format='[%(levelname)s] %(message)s')
 LOGGER = logging.getLogger()
+LOGGER.setLevel(logging.INFO)
+
+random.seed(47)
 
 DRY_RUN = True if 'true' == os.getenv('DRY_RUN', 'true') else False
 
@@ -204,7 +204,7 @@ def send_email(from_addr, to_addrs, subject, html_body):
     },
     Source=from_addr
   )
-  retrn ret
+  return ret
 
 
 def lambda_handler(event, context):
