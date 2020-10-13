@@ -63,6 +63,17 @@ class AwsRssFeedTransBotStack(core.Stack):
       code=_lambda.Code.from_bucket(s3_lib_bucket, 'var/googletrans-lib.zip')
     )
 
+    lambda_fn_env = {
+      'REGION_NAME': core.Aws.REGION,
+      'S3_BUCKET_NAME': s3_bucket.bucket_name,
+      'S3_OBJ_KEY_PREFIX': 'whats-new',
+      'PRESIGNED_URL_EXPIRES_IN': '{}'.format(86400*7),
+      'EMAIL_FROM_ADDRESS': self.node.try_get_context('email_from_address'),
+      'EMAIL_TO_ADDRESSES': self.node.try_get_context('email_to_addresses'),
+      'TRANS_DEST_LANG': self.node.try_get_context('trans_dest_lang'),
+      'DRY_RUN': self.node.try_get_context('dry_run')
+    }
+
     #XXX: Deploy lambda in VPC - https://github.com/aws/aws-cdk/issues/1342
     rss_feed_trans_bot_lambda_fn = _lambda.Function(self, 'RssFeedTransBot',
       runtime=_lambda.Runtime.PYTHON_3_7,
@@ -70,18 +81,9 @@ class AwsRssFeedTransBotStack(core.Stack):
       handler='rss_feed_trans_bot.lambda_handler',
       description='Translate rss feed',
       code=_lambda.Code.asset('./src/main/python/RssFeedTransBot'),
-      environment={
-        'DRY_RUN': 'true',
-        'REGION_NAME': core.Aws.REGION
-        'S3_BUCKET_NAME': s3_bucket,
-        'S3_OBJ_KEY_PREFIX': 'whats-new',
-        'PRESIGNED_URL_EXPIRES_IN':'{}'.format(86400*7),
-        'EMAIL_FROM_ADDRESS': 'your-sender-email-addr',
-        'EMAIL_TO_ADDRESSES': 'your-receiver-email-addr-list',
-        'TRANS_DEST_LANG': 'ko'
-      },
+      environment=lambda_fn_env,
       timeout=core.Duration.minutes(15),
-      layers=[bs4_lib_layer, feedparser_lib_layer, googoletrans_lib_layer],
+      layers=[bs4_lib_layer, feedparser_lib_layer, googletrans_lib_layer],
       security_groups=[sg_rss_feed_trans_bot],
       vpc=vpc
     )

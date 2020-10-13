@@ -1,3 +1,7 @@
 {
-  "lib_bucket_name": "Your-S3-Bucket-Name-Of-Lib"
+  "lib_bucket_name": "Your-S3-Bucket-Name-Of-Lib",
+  "email_from_address": "your-sender-email-addr",
+  "email_to_addresses": "your-receiver-email-addr-list",
+  "dry_run": "true",
+  "trans_dest_lang": "ko"
 }
