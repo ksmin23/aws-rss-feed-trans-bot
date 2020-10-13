@@ -3,6 +3,7 @@ aws-cdk.core==1.67.0
 aws-cdk.aws-ec2==1.67.0
 aws-cdk.aws-events==1.67.0
 aws-cdk.aws-events-targets==1.67.0
+aws-cdk.aws-elasticache-1.67.0
 aws-cdk.aws-iam==1.67.0
 aws-cdk.aws-lambda==1.67.0
 aws-cdk.aws-logs==1.67.0
