@@ -1,6 +1,6 @@
 
 # RSS Feed Translation Bot
-이 프로젝트는 영어로 작성된 [AWS의 최신 소식 (What's New with AWS?)](https://aws.amazon.com/new/)을 한국어로 기계 번역해서 영문과 한국어 번역 내용(아래 그림 참조)을 email로 전송해준다.<br/>
+영문 [AWS의 최신 소식 (What's New with AWS?)](https://aws.amazon.com/new/)을 한국어로 기계 번역해서 영문과 한국어 번역 내용(아래 그림 참조)을 email로 전송해주는 프로젝트.<br/>
 
   **Figure 1.** 영문 AWS의 최신 소식을 한국어로 번역한 결과
   ![rss_feed_trans_bot_results](./assets/rss_feed_trans_bot_results.png)
