@@ -42,7 +42,7 @@ EMAIL_FROM_ADDRESS = os.getenv('EMAIL_FROM_ADDRESS', 'your-sender-email-addr')
 EMAIL_TO_ADDRESSES = os.getenv('EMAIL_TO_ADDRESSES', 'your-receiver-email-addr-list')
 EMAIL_TO_ADDRESSES = [e.strip() for e in EMAIL_TO_ADDRESSES.split(',')]
 
-TRANSLATE_ALL_FEEDS = True if 'true' == os.getenv('TRANSLATE_ALL_FEEDS', 'true') else False
+TRANSLATE_ALL_FEEDS = True if 'true' == os.getenv('TRANSLATE_ALL_FEEDS', 'false') else False
 
 TRANS_DEST_LANG = os.getenv('TRANS_DEST_LANG', 'ko')
 TRANS_REQ_INTERVALS = [0.1, 0.3, 0.5, 0.7, 1.0]
@@ -328,7 +328,7 @@ def lambda_handler(event, context):
   LOGGER.info('save translated rss feeds')
 
   feed_ids = [e['id'] for e in res['entries']]
-  save_feeds_translated(redis_client, feed_ids, ttl_sec=60*15)
+  save_feeds_translated(redis_client, feed_ids)
 
   LOGGER.info('end')
 
