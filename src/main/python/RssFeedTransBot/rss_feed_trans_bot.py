@@ -12,13 +12,20 @@ import os
 import pprint
 import random
 
+import boto3
 import feedparser
 from bs4 import BeautifulSoup
 from googletrans import Translator
-import boto3
+import redis
 
 LOGGER = logging.getLogger()
-LOGGER.setLevel(logging.INFO)
+if len(LOGGER.handlers) > 0:
+  # The Lambda environment pre-configures a handler logging to stderr.
+  # If a handler is already configured, `.basicConfig` does not execute.
+  # Thus we set the level directly.
+  LOGGER.setLevel(logging.INFO)
+else:
+  logging.basicConfig(level=logging.INFO)
 
 random.seed(47)
 
@@ -35,10 +42,18 @@ EMAIL_FROM_ADDRESS = os.getenv('EMAIL_FROM_ADDRESS', 'your-sender-email-addr')
 EMAIL_TO_ADDRESSES = os.getenv('EMAIL_TO_ADDRESSES', 'your-receiver-email-addr-list')
 EMAIL_TO_ADDRESSES = [e.strip() for e in EMAIL_TO_ADDRESSES.split(',')]
 
+TRANSLATE_ALL_FEEDS = True if 'true' == os.getenv('TRANSLATE_ALL_FEEDS', 'true') else False
+
 TRANS_DEST_LANG = os.getenv('TRANS_DEST_LANG', 'ko')
 TRANS_REQ_INTERVALS = [0.1, 0.3, 0.5, 0.7, 1.0]
 
 WHATS_NEW_URL = 'https://aws.amazon.com/about-aws/whats-new/recent/feed/'
+
+ELASTICACHE_HOST = os.getenv('ELASTICACHE_HOST', 'localhost')
+
+
+def split_list(x, n=10):
+  return [x[i:i + n] for i in range(0, len(x), n)]
 
 
 def strip_html_tags(html):
@@ -207,12 +222,64 @@ def send_email(from_addr, to_addrs, subject, html_body):
   return ret
 
 
+def get_feeds_translated(redis_client, feed_ids):
+  if not redis_client:
+    return {}
+
+  feed_key_ids = [('id:{}'.format(e), e) for e in feed_ids]
+  chunked_feed_key_ids = split_list(feed_key_ids)
+
+  feeds_translated = {}
+  with redis_client.pipeline() as pipe:
+    for elems in chunked_feed_key_ids:
+       pipe.mget([k for k, v in elems])
+       res = pipe.execute()
+       feeds_translated.update({e.decode('utf-8'): True for e in res[0] if e})
+  return feeds_translated
+
+
+def save_feeds_translated(redis_client, feed_ids, ttl_sec=86400*3):
+  if not redis_client:
+    return
+
+  feed_key_ids = [('id:{}'.format(e), e) for e in feed_ids]
+  chunked_feed_key_ids = split_list(feed_key_ids)
+
+  with redis_client.pipeline() as pipe:
+    cnt = 0
+    for elems in chunked_feed_key_ids:
+       pipe.mset({k: v for k, v in elems})
+       for k, _ in elems:
+         pipe.expire(k, ttl_sec)
+       pipe.execute()
+
+
 def lambda_handler(event, context):
   LOGGER.info('start to get rss feed')
 
-  res = parse_feed(WHATS_NEW_URL)
+  redis_client = redis.Redis(host=ELASTICACHE_HOST, port=6379, db=0) if not TRANSLATE_ALL_FEEDS else None
 
-  LOGGER.info('rss_feed: count={count}, last_updated="{last_updated}"'.format(count=res['count'],
+  feeds_parsed = parse_feed(WHATS_NEW_URL)
+
+  LOGGER.info('rss_feed: count={count}, last_updated="{last_updated}"'.format(count=feeds_parsed['count'],
+    last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', feeds_parsed['updated_parsed'])))
+
+  LOGGER.info('filter new rss feeds')
+
+  feed_ids = [e['id'] for e in feeds_parsed['entries']]
+  feeds_translated = get_feeds_translated(redis_client, feed_ids)
+  if len(feeds_translated):
+    LOGGER.info('end')
+    return
+
+  feed_entries = [elem for elem in feeds_parsed['entries'] if elem['id'] not in feeds_translated] 
+  res = {
+    'count': len(feed_entries),
+    'updated_parsed': feeds_parsed['updated_parsed'],
+    'entries': feed_entries
+  }
+
+  LOGGER.info('new_rss_feed: count={count}, last_updated="{last_updated}"'.format(count=res['count'],
     last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed'])))
 
   LOGGER.info('translate rss feed')
@@ -258,6 +325,11 @@ def lambda_handler(event, context):
   elif s3_obj_url is not None:
     send_email(from_addr, to_addrs, subject, html_body)
 
+  LOGGER.info('save translated rss feeds')
+
+  feed_ids = [e['id'] for e in res['entries']]
+  save_feeds_translated(redis_client, feed_ids, ttl_sec=60*15)
+
   LOGGER.info('end')
 
 
@@ -277,9 +349,7 @@ if __name__ == '__main__':
   event['time'] = datetime.utcnow().strftime('%Y-%m-%dT%H:00:00')
 
   start_t = time.time()
-
   lambda_handler(event, {})
-
   end_t = time.time()
   LOGGER.info('run_time: {:.2f}'.format(end_t - start_t))
 
