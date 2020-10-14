@@ -12,7 +12,7 @@
 
 1. [Getting Started With the AWS CDK](https://docs.aws.amazon.com/cdk/latest/guide/getting_started.html)를 참고해서 cdk를 설치하고,
 cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등록한다.
-예를 들어서, cdk_user라는 IAM User를 생성 한 후, 아래와 같이 `~/.aws/config`에 추가로 등록한다.
+예를 들어서, `cdk_user`라는 IAM User를 생성 한 후, 아래와 같이 `~/.aws/config`에 추가로 등록한다.
 
     ```shell script
     $ cat ~/.aws/config
@@ -40,7 +40,7 @@ Lambda Layer에 등록할 Python 패키지를 생성해서 s3에 저장한다.
     (.env) $ ./build-aws-lambda-layer.sh lambda-layer-resources/var
     ```
 
-4. `cdk.context.json` 파일을 열어서, `lib_bucket_name`에 Lambda Layer에 등록할 Python 패키지가 저장된 s3 bucket 이름을 적고<br/>,`email_from_address`과 `email_to_addresses`에 e-mail 발신자와 수신자들 목록을 각각 적는다.<br/> RSS Feed를 읽는 주기를 변경하고자 하는 경우, `event_schedule`을 crontab 문법 처럼 등록 한다.<br/>
+4. `cdk.context.json` 파일을 열어서, `lib_bucket_name`에 Lambda Layer에 등록할 Python 패키지가 저장된 s3 bucket 이름을 적고,<br/>`email_from_address`과 `email_to_addresses`에 e-mail 발신자와 수신자들 목록을 각각 넣는다.<br/> RSS Feed를 읽는 주기를 변경하고자 하는 경우, `event_schedule`을 crontab 문법 처럼 등록 한다.<br/>
 `event_schedule` 기본 값은 매 시간 마다 RSS Feed를 읽어서 번역한다.
 
     ```json
