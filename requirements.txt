@@ -1,4 +1,3 @@
-# pip install aws-cdk
 aws-cdk.core==1.67.0
 aws-cdk.aws-ec2==1.67.0
 aws-cdk.aws-events==1.67.0
@@ -11,8 +10,11 @@ aws-cdk.aws-s3==1.67.0
 boto3==1.15.16
 botocore==1.18.16
 
-# pip install
+# packages for aws lambda layer
+# DO NOT REMOVE [[layers]] comment
+#[[layers]]
 beautifulsoup4==4.9.3
 feedparser==6.0.1
 googletrans==3.0.0
 redis==3.3.11
+

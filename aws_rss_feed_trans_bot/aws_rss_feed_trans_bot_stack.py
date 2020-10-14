@@ -92,28 +92,10 @@ class AwsRssFeedTransBotStack(core.Stack):
     #XXX: https://github.com/aws/aws-cdk/issues/1342
     s3_lib_bucket = s3.Bucket.from_bucket_name(self, id, s3_lib_bucket_name)
 
-    bs4_lib_layer = _lambda.LayerVersion(self, 'Bs4Lib',
-      layer_version_name='bs4-lib',
+    lambda_lib_layer = _lambda.LayerVersion(self, "RssFeedTransBotLib",
+      layer_version_name="rss_feed_trans_bot-lib",
       compatible_runtimes=[_lambda.Runtime.PYTHON_3_7],
-      code=_lambda.Code.from_bucket(s3_lib_bucket, 'var/bs4-lib.zip')
-    )
-
-    feedparser_lib_layer = _lambda.LayerVersion(self, 'FeedParserLib',
-      layer_version_name='feedparser-lib',
-      compatible_runtimes=[_lambda.Runtime.PYTHON_3_7],
-      code=_lambda.Code.from_bucket(s3_lib_bucket, 'var/feedparser-lib.zip')
-    )
-
-    googletrans_lib_layer = _lambda.LayerVersion(self, 'GoogletransLib',
-      layer_version_name='googletrans-lib',
-      compatible_runtimes=[_lambda.Runtime.PYTHON_3_7],
-      code=_lambda.Code.from_bucket(s3_lib_bucket, 'var/googletrans-lib.zip')
-    )
-
-    redis_lib_layer = _lambda.LayerVersion(self, "RedisLib",
-      layer_version_name="redis-lib",
-      compatible_runtimes=[_lambda.Runtime.PYTHON_3_7],
-      code=_lambda.Code.from_bucket(s3_lib_bucket, "var/redis-lib.zip")
+      code=_lambda.Code.from_bucket(s3_lib_bucket, "var/rss_feed_trans_bot-lib.zip")
     )
 
     lambda_fn_env = {
@@ -124,7 +106,8 @@ class AwsRssFeedTransBotStack(core.Stack):
       'EMAIL_FROM_ADDRESS': self.node.try_get_context('email_from_address'),
       'EMAIL_TO_ADDRESSES': self.node.try_get_context('email_to_addresses'),
       'TRANS_DEST_LANG': self.node.try_get_context('trans_dest_lang'),
-      'DRY_RUN': self.node.try_get_context('dry_run')
+      'DRY_RUN': self.node.try_get_context('dry_run'),
+      'ELASTICACHE_HOST': translated_feed_cache.attr_redis_endpoint_address
     }
 
     #XXX: Deploy lambda in VPC - https://github.com/aws/aws-cdk/issues/1342
@@ -136,8 +119,8 @@ class AwsRssFeedTransBotStack(core.Stack):
       code=_lambda.Code.asset('./src/main/python/RssFeedTransBot'),
       environment=lambda_fn_env,
       timeout=core.Duration.minutes(15),
-      layers=[bs4_lib_layer, feedparser_lib_layer, googletrans_lib_layer, redis_lib_layer],
-      security_groups=[sg_rss_feed_trans_bot],
+      layers=[lambda_lib_layer],
+      security_groups=[sg_rss_feed_trans_bot, sg_use_elasticache],
       vpc=vpc
     )
 
