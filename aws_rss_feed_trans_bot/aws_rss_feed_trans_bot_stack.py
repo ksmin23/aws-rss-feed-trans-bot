@@ -138,17 +138,13 @@ class AwsRssFeedTransBotStack(core.Stack):
         "s3:PutObject"]
     }))
 
-    # Run every hour
     # See https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html
+    event_schedule = dict(zip(['minute', 'hour', 'month', 'week_day', 'year'],
+      self.node.try_get_context('event_schedule').split(' ')))
+
     scheduled_event_rule = aws_events.Rule(self, 'RssFeedScheduledRule',
-      schedule=aws_events.Schedule.cron(
-        minute='0',
-        hour='*',
-        month='*',
-        week_day='*',
-        year='*'
-      ),
-    )
+      schedule=aws_events.Schedule.cron(**event_schedule))
+
     scheduled_event_rule.add_target(aws_events_targets.LambdaFunction(rss_feed_trans_bot_lambda_fn))
 
     log_group = aws_logs.LogGroup(self, 'RssFeedTransBotLogGroup',
