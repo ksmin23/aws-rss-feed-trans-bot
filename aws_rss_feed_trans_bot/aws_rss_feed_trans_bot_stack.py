@@ -34,6 +34,9 @@ class AwsRssFeedTransBotStack(core.Stack):
       bucket_name='aws-rss-feed-{region}-{account}'.format(region=core.Aws.REGION,
         account=core.Aws.ACCOUNT_ID))
 
+    s3_bucket.add_lifecycle_rule(prefix='whats-new-html/', id='whats-new-html',
+      abort_incomplete_multipart_upload_after=core.Duration.days(3),
+      expiration=core.Duration.days(7))
 
     sg_use_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheClientSG',
       vpc=vpc,
