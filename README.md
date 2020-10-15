@@ -1,5 +1,5 @@
-
 # RSS Feed Translation Bot
+
 영문 [AWS의 최신 소식 (What's New with AWS?)](https://aws.amazon.com/new/)을 한국어로 기계 번역해서 영문과 한국어 번역 내용(아래 그림 참조)을 email로 전송해주는 프로젝트.<br/>
 
   **Figure 1.** 영문 AWS의 최신 소식을 한국어로 번역한 결과
@@ -17,8 +17,8 @@ cdk를 실행할 때 사용할 IAM User를 생성한 후, `~/.aws/config`에 등
     ```shell script
     $ cat ~/.aws/config
     [profile cdk_user]
-    aws_access_key_id=AKIAI44QH8DHBEXAMPLE
-    aws_secret_access_key=je7MtGbClwBF/2Zp9Utk/h3yCo8nvbEXAMPLEKEY
+    aws_access_key_id=AKIAIOSFODNN7EXAMPLE
+    aws_secret_access_key=wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
     region=us-east-1
     ```
 
