@@ -149,7 +149,7 @@ tr:nth-child(even) {{
   for elem in res['entries']:
     html_tr_elem = HTML_TABLE_ROW_FORMAT.format(doc_id=elem['id'],
       link=elem['link'], pub_date=time.strftime('%Y-%m-%dT%H:%M:%S', elem['published_parsed']),
-      title=elem['title'], summary=elem['summary_parsed']['text'],
+      title=elem['title'], summary=elem['summary'],
       title_trans=elem['title_trans']['text'], summary_trans=elem['summary_trans']['text'],
       lang=elem['title_trans']['lang'], tags=','.join(elem['tags']))
     html_table_rows.append(html_tr_elem)
