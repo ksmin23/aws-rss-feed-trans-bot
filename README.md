@@ -53,6 +53,7 @@ Lambda Layer에 등록할 Python 패키지를 생성해서 s3에 저장한다.
       "event_schedule": "0 * * * *"
     }
     ```
+   `email_from_address`은 [Amazon SES에서 이메일 주소 확인](https://docs.aws.amazon.com/ses/latest/DeveloperGuide/verify-email-addresses.html)를 참고해서 반드시 사용 가능한 email 주소인지 확인한다. (배포 전에 한번만 확인 하면 된다.)
 
 5. `cdk deploy` 명령어를 이용해서 배포한다.
     ```shell script
