@@ -138,6 +138,12 @@ class AwsRssFeedTransBotStack(core.Stack):
         "s3:PutObject"]
     }))
 
+    rss_feed_trans_bot_lambda_fn.add_to_role_policy(aws_iam.PolicyStatement(**{
+      "effect": aws_iam.Effect.ALLOW,
+      "resources": ["*"],
+      "actions": ["ses:SendEmail"]
+    }))
+
     # See https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html
     event_schedule = dict(zip(['minute', 'hour', 'month', 'week_day', 'year'],
       self.node.try_get_context('event_schedule').split(' ')))
