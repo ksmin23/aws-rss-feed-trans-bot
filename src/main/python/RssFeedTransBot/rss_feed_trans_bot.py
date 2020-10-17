@@ -33,13 +33,13 @@ DRY_RUN = True if 'true' == os.getenv('DRY_RUN', 'true') else False
 
 AWS_REGION = os.getenv('REGION_NAME', 'us-east-1')
 
-S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME', 'your-bucket-name')
+S3_BUCKET_NAME = os.getenv('S3_BUCKET_NAME')
 S3_OBJ_KEY_PREFIX = os.getenv('S3_OBJ_KEY_PREFIX', 'whats-new')
 
-PRESIGNED_URL_EXPIRES_IN = int(os.getenv('PRESIGNED_URL_EXPIRES_IN', 86400*7))
+PRESIGNED_URL_EXPIRES_IN = int(os.getenv('PRESIGNED_URL_EXPIRES_IN', 86400*15))
 
-EMAIL_FROM_ADDRESS = os.getenv('EMAIL_FROM_ADDRESS', 'your-sender-email-addr')
-EMAIL_TO_ADDRESSES = os.getenv('EMAIL_TO_ADDRESSES', 'your-receiver-email-addr-list')
+EMAIL_FROM_ADDRESS = os.getenv('EMAIL_FROM_ADDRESS')
+EMAIL_TO_ADDRESSES = os.getenv('EMAIL_TO_ADDRESSES')
 EMAIL_TO_ADDRESSES = [e.strip() for e in EMAIL_TO_ADDRESSES.split(',')]
 
 TRANSLATE_ALL_FEEDS = True if 'true' == os.getenv('TRANSLATE_ALL_FEEDS', 'false') else False
@@ -107,54 +107,60 @@ td, th {{
   padding: 8px;
 }}
 
-tr:nth-child(even) {{
+tr:nth-child(odd) {{
   background-color: #dddddd;
 }}
 </style>
 </head>
 <body>
-
-<h2>Recent Announcements ({last_updated})</h2>
-
-<table>
-  <tr>
-    <th>doc_id</th>
-    <th>link</th>
-    <th>pub_date</th>
-    <th>title</th>
-    <th>summary</th>
-    <th>title_{lang}</th>
-    <th>summary_{lang}</th>
-    <th>tags</th>
-  </tr>
-  {table_rows}
-</table>
-
+  <h2><a href="https://aws.amazon.com/ko/new/">AWS의 새로운 소식</a></h2>
+  <table>
+    <tr>
+      <th>section</th>
+      <th>content</th>
+    </tr>
+    {table_rows}
+  </table>
+  <p>Last updated: {last_updated}</p>
 </body>
 </html>'''
 
-  HTML_TABLE_ROW_FORMAT = '''
+  HTML_TABLE_ROW_FORMAT = '''<tr>
+    <td>title</td>
+    <td><a href="{link}">{title}</a></td>
+  </tr>
   <tr>
-    <td>{doc_id}</td>
-    <td>{link}</td>
-    <td>{pub_date}</td>
-    <td>{title}</td>
-    <td>{summary}</td>
+    <td>title_{lang}</td>
     <td>{title_trans}</td>
-    <td>{summary_trans}</td>
+  </tr>
+  <tr>
+    <td>summary</td>
+    <td>{summary}</td>
+  </tr>
+  <tr>
+    <td>summary_{lang}</td>
+    <td><p>{summary_trans}</p></td>
+  </tr>
+  <tr>
+    <td>pub_date</td>
+    <td>{pub_date}</td>
+  </tr>
+  <tr>
+    <td>tags</td>
     <td>{tags}</td>
   </tr>'''
 
   html_table_rows = []
   for elem in res['entries']:
-    html_tr_elem = HTML_TABLE_ROW_FORMAT.format(doc_id=elem['id'],
-      link=elem['link'], pub_date=time.strftime('%Y-%m-%dT%H:%M:%S', elem['published_parsed']),
+    html_tr_elem = HTML_TABLE_ROW_FORMAT.format(link=elem['link'],
+      pub_date=time.strftime('%Y-%m-%dT%H:%M:%S', elem['published_parsed']),
       title=elem['title'], summary=elem['summary'],
       title_trans=elem['title_trans']['text'], summary_trans=elem['summary_trans']['text'],
       lang=elem['title_trans']['lang'], tags=','.join(elem['tags']))
     html_table_rows.append(html_tr_elem)
 
-  html_doc = HTML_FORMAT.format(last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed']),
+  html_doc = HTML_FORMAT.format(
+    last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed']),
     lang='ko', table_rows='\n'.join(html_table_rows))
 
   return html_doc
@@ -174,33 +180,6 @@ def fwrite_s3(s3_client, doc, s3_bucket, s3_obj_key):
     return (200 == status_code)
   except Exception as ex:
     return False
-
-
-def fread_s3(s3_client, s3_bucket_name, s3_obj_key):
-  ret = s3_client.get_object(Bucket=s3_bucket_name, Key=s3_obj_key)
-
-  try:
-    content_length = ret['ContentLength']
-    status_code = ret['ResponseMetadata']['HTTPStatusCode']
-    if content_length > 0 and status_code == 200:
-      body = ret['Body']
-      return [elem.decode('utf-8') for elem in body.iter_lines()]
-    else:
-      return []
-  except Exception as ex:
-    return []
-
-
-def create_presigned_url(bucket_name, object_name, expiration=3600):
-  s3_client = boto3.client('s3', region_name=AWS_REGION)
-  try:
-    res = s3_client.generate_presigned_url('get_object',
-      Params={'Bucket': bucket_name, 'Key': object_name},
-      ExpiresIn=expiration)
-  except botocore.exceptions.ClientError as ex:
-    LOGGER.error(repr(ex))
-    return None
-  return res
 
 
 def send_email(from_addr, to_addrs, subject, html_body):
@@ -303,29 +282,19 @@ def lambda_handler(event, context):
 
   html_doc = gen_html(res)
 
-  LOGGER.info('save translated rss feed in S3')
+  if not DRY_RUN:
+    LOGGER.info('send translated rss feed by email')
+    subject = '''[translated] AWS Recent Announcements'''
+    send_email(EMAIL_FROM_ADDRESS, EMAIL_TO_ADDRESSES, subject, html_doc)
+
+  LOGGER.info('save translated rss feeds in S3')
 
   s3_file_name = 'anncmt-{}.html'.format(time.strftime('%Y%m%d%H', res['updated_parsed']))
   s3_obj_key = '{prefix}-html/{file_name}'.format(prefix=S3_OBJ_KEY_PREFIX, file_name=s3_file_name)
   s3_client = boto3.client('s3', region_name=AWS_REGION)
   fwrite_s3(s3_client, html_doc, s3_bucket=S3_BUCKET_NAME, s3_obj_key=s3_obj_key)
 
-  LOGGER.info('send translated rss feed by email')
-
-  s3_obj_url = create_presigned_url(S3_BUCKET_NAME, s3_obj_key, expiration=PRESIGNED_URL_EXPIRES_IN)
-
-  from_addr = EMAIL_FROM_ADDRESS
-  to_addrs = EMAIL_TO_ADDRESSES
-  subject = '''[translated] AWS Recent Announcements'''
-  html_body = '''You can download AWS Recent Announcements translated in Korean:</br>
-<a class="ulink" href="{}" target="_blank">here</a>'''.format(s3_obj_url)
-
-  if DRY_RUN:
-    LOGGER.info('download-url: {}'.format(s3_obj_url))
-  elif s3_obj_url is not None:
-    send_email(from_addr, to_addrs, subject, html_body)
-
-  LOGGER.info('save translated rss feeds')
+  LOGGER.info('log translated rss feeds')
 
   feed_ids = [e['id'] for e in res['entries']]
   save_feeds_translated(redis_client, feed_ids)
