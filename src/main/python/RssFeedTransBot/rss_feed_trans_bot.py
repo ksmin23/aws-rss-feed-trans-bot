@@ -114,7 +114,7 @@ tr:nth-child(even) {{
 </head>
 <body>
 
-<h2>Recent Anouncements ({last_updated})</h2>
+<h2>Recent Announcements ({last_updated})</h2>
 
 <table>
   <tr>
