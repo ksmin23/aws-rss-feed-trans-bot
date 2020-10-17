@@ -77,3 +77,17 @@ Lambda Layer에 등록할 Python 패키지를 생성해서 s3에 저장한다.
  * `cdk diff`        compare deployed stack with current state
  * `cdk docs`        open CDK documentation
 
+## Test
+
+1. AWS 웹 콘솔에서 Lambda 서비스를 선택한 후, `RssFeedTransBot` 람다 함수를 선택 한다.
+![lambda-function-list](./assets/lambda-function-list.png)
+
+2. **Configure test events**를 선택한다.
+![lambda-configure-test-events](./assets/lambda-configure-test-events.png)
+
+3. **Cloud Watch Scheduled Event**를 생성후 저장한다.<br/>
+(이 예제에서는 `TestScheduledEvent` 라는 이름을 사용한다.)
+![lambda-test-scheduled-event](./assets/lambda-test-scheduled-event.png)
+
+4. **Test** 버튼을 클릭해서 람다 함수를 실행한다.
+![lambda-run-test](./assets/lambda-run-test.png)
