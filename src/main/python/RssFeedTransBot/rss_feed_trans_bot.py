@@ -11,6 +11,7 @@ import io
 import os
 import pprint
 import random
+import traceback
 
 import boto3
 import feedparser
@@ -78,6 +79,21 @@ def parse_feed(feed_url):
     doc['summary_parsed'] = strip_html_tags(doc['summary'])
     entry_list.append(doc)
   return {'entries': entry_list, 'updated_parsed': parsed_rss_feed['updated_parsed'], 'count': len(entry_list)}
+
+
+def mk_translator(dest='ko'):
+  for i in range(1, 7):
+    try:
+      translator = Translator()
+      _ = translator.translate('Hello', dest=dest)
+      return translator
+    except Exception as ex:
+      LOGGER.error(repr(ex))
+      wait_time = min(pow(2, i), 60)
+      LOGGER.info('retry to translate after %s sec' % wait_time)
+      time.sleep(wait_time)
+  else:
+    raise RuntimeError()
 
 
 def translate(translator, texts, dest='ko', interval=1):
@@ -262,7 +278,7 @@ def lambda_handler(event, context):
     last_updated=time.strftime('%Y-%m-%dT%H:%M:%S', res['updated_parsed'])))
 
   LOGGER.info('translate rss feed')
-  translator = Translator()
+  translator = mk_translator(dest=TRANS_DEST_LANG)
   title_texts = [(e['id'], e['title']) for e in res['entries']]
   title_texts_trans = translate(translator, title_texts,
     dest=TRANS_DEST_LANG, interval=random.choice(TRANS_REQ_INTERVALS))
