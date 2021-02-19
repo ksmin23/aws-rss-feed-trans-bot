@@ -144,6 +144,16 @@ class AwsRssFeedTransBotStack(core.Stack):
       "actions": ["ses:SendEmail"]
     }))
 
+    translate_ro_policy = aws_iam.ManagedPolicy.from_managed_policy_arn(self,
+      'TranslateReadOnly',
+      'arn:aws:iam::aws:policy/TranslateReadOnly')
+    rss_feed_trans_bot_lambda_fn.role.add_managed_policy(translate_ro_policy)
+
+    comprehend_ro_policy = aws_iam.ManagedPolicy.from_managed_policy_arn(self,
+      'ComprehendReadOnly',
+      'arn:aws:iam::aws:policy/ComprehendReadOnly')
+    rss_feed_trans_bot_lambda_fn.role.add_managed_policy(comprehend_ro_policy)
+
     # See https://docs.aws.amazon.com/lambda/latest/dg/tutorial-scheduled-events-schedule-expressions.html
     event_schedule = dict(zip(['minute', 'hour', 'month', 'week_day', 'year'],
       self.node.try_get_context('event_schedule').split(' ')))
