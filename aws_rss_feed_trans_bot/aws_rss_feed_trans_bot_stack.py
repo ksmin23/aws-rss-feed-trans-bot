@@ -2,8 +2,10 @@
 # -*- encoding: utf-8 -*-
 # vim: tabstop=2 shiftwidth=2 softtabstop=2 expandtab
 
+import aws_cdk as cdk
+
 from aws_cdk import (
-  core,
+  Stack,
   aws_ec2,
   aws_iam,
   aws_s3 as s3,
@@ -13,12 +15,13 @@ from aws_cdk import (
   aws_events_targets,
   aws_elasticache
 )
+from constructs import Construct
 
 
-class AwsRssFeedTransBotStack(core.Stack):
+class AwsRssFeedTransBotStack(Stack):
 
-  def __init__(self, scope: core.Construct, id: str, **kwargs) -> None:
-    super().__init__(scope, id, **kwargs)
+  def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
+    super().__init__(scope, construct_id, **kwargs)
 
     # The code that defines your stack goes here
     vpc = aws_ec2.Vpc(self, 'RssFeedTransBotVPC',
@@ -31,12 +34,12 @@ class AwsRssFeedTransBotStack(core.Stack):
     )
 
     s3_bucket = s3.Bucket(self, 'TransRecentAnncmtBucket',
-      bucket_name='aws-rss-feed-{region}-{account}'.format(region=core.Aws.REGION,
-        account=core.Aws.ACCOUNT_ID))
+      bucket_name='aws-rss-feed-{region}-{account}'.format(region=cdk.Aws.REGION,
+        account=cdk.Aws.ACCOUNT_ID))
 
     s3_bucket.add_lifecycle_rule(prefix='whats-new-html/', id='whats-new-html',
-      abort_incomplete_multipart_upload_after=core.Duration.days(3),
-      expiration=core.Duration.days(7))
+      abort_incomplete_multipart_upload_after=cdk.Duration.days(3),
+      expiration=cdk.Duration.days(7))
 
     sg_use_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheClientSG',
       vpc=vpc,
@@ -44,7 +47,7 @@ class AwsRssFeedTransBotStack(core.Stack):
       description='security group for redis client used rss feed trans bot',
       security_group_name='use-rss-feed-trans-bot-redis'
     )
-    core.Tags.of(sg_use_elasticache).add('Name', 'use-rss-feed-trans-bot-redis')
+    cdk.Tags.of(sg_use_elasticache).add('Name', 'use-rss-feed-trans-bot-redis')
 
     sg_elasticache = aws_ec2.SecurityGroup(self, 'RssFeedTransBotCacheSG',
       vpc=vpc,
@@ -52,13 +55,13 @@ class AwsRssFeedTransBotStack(core.Stack):
       description='security group for redis used rss feed trans bot',
       security_group_name='rss-feed-trans-bot-redis'
     )
-    core.Tags.of(sg_elasticache).add('Name', 'rss-feed-trans-bot-redis')
+    cdk.Tags.of(sg_elasticache).add('Name', 'rss-feed-trans-bot-redis')
 
     sg_elasticache.add_ingress_rule(peer=sg_use_elasticache, connection=aws_ec2.Port.tcp(6379), description='use-rss-feed-trans-bot-redis')
 
     elasticache_subnet_group = aws_elasticache.CfnSubnetGroup(self, 'RssFeedTransBotCacheSubnetGroup',
       description='subnet group for rss-feed-trans-bot-redis',
-      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE).subnet_ids,
+      subnet_ids=vpc.select_subnets(subnet_type=aws_ec2.SubnetType.PRIVATE_WITH_NAT).subnet_ids,
       cache_subnet_group_name='rss-feed-trans-bot-redis'
     )
 
@@ -88,7 +91,7 @@ class AwsRssFeedTransBotStack(core.Stack):
       description='security group for rss feed trans bot',
       security_group_name='rss-feed-trans-bot'
     )
-    core.Tags.of(sg_rss_feed_trans_bot).add('Name', 'rss-feed-trans-bot')
+    cdk.Tags.of(sg_rss_feed_trans_bot).add('Name', 'rss-feed-trans-bot')
 
     s3_lib_bucket_name = self.node.try_get_context('lib_bucket_name')
 
@@ -102,7 +105,7 @@ class AwsRssFeedTransBotStack(core.Stack):
     )
 
     lambda_fn_env = {
-      'REGION_NAME': core.Aws.REGION,
+      'REGION_NAME': cdk.Aws.REGION,
       'S3_BUCKET_NAME': s3_bucket.bucket_name,
       'S3_OBJ_KEY_PREFIX': 'whats-new',
       'PRESIGNED_URL_EXPIRES_IN': '{}'.format(86400*7),
@@ -119,9 +122,9 @@ class AwsRssFeedTransBotStack(core.Stack):
       function_name='RssFeedTransBot',
       handler='rss_feed_trans_bot.lambda_handler',
       description='Translate rss feed',
-      code=_lambda.Code.asset('./src/main/python/RssFeedTransBot'),
+      code=_lambda.Code.from_asset('./src/main/python/RssFeedTransBot'),
       environment=lambda_fn_env,
-      timeout=core.Duration.minutes(15),
+      timeout=cdk.Duration.minutes(15),
       layers=[lambda_lib_layer],
       security_groups=[sg_rss_feed_trans_bot, sg_use_elasticache],
       vpc=vpc
@@ -165,6 +168,7 @@ class AwsRssFeedTransBotStack(core.Stack):
 
     log_group = aws_logs.LogGroup(self, 'RssFeedTransBotLogGroup',
       log_group_name='/aws/lambda/RssFeedTransBot',
-      retention=aws_logs.RetentionDays.THREE_DAYS)
+      retention=aws_logs.RetentionDays.THREE_DAYS,
+      removal_policy=cdk.RemovalPolicy.DESTROY)
     log_group.grant_write(rss_feed_trans_bot_lambda_fn)
 

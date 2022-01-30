@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 
-from aws_cdk import core
+import aws_cdk as cdk
 
 from aws_rss_feed_trans_bot.aws_rss_feed_trans_bot_stack import AwsRssFeedTransBotStack
 
 
-app = core.App()
-AwsRssFeedTransBotStack(app, "aws-rss-feed-trans-bot")
+app = cdk.App()
+AwsRssFeedTransBotStack(app, "AwsRssFeedTransBot")
 
 app.synth()
